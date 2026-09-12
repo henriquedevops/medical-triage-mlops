@@ -1,0 +1,32 @@
+# Ambiente
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Segredos locais
+.env
+
+# Artefatos de modelo (gerados por `make train` / CI, não versionados)
+models/*.joblib
+models/*.onnx
+models/*.pt
+
+# Dados processados (derivados do raw, regeneráveis)
+data/processed/*
+!data/processed/.gitkeep
+
+# Relatórios gerados (latência, comparação de baselines)
+reports/*.json
+!reports/.gitkeep
+
+# MLflow / logs locais (se usados em experimentação futura)
+mlruns/
+*.log
+
+# SO / editor
+.DS_Store
+.vscode/
