@@ -38,7 +38,9 @@ def medical_triage_retrain():
         from triage.data.loader import load_dataset
 
         settings = Settings()
-        train_df, test_df = load_dataset(settings.raw_train_path, settings.raw_test_path)
+        train_df, test_df = load_dataset(
+            settings.raw_train_path, settings.raw_test_path
+        )
         logger.info("train=%d linhas, test=%d linhas", len(train_df), len(test_df))
         return {"n_train": len(train_df), "n_test": len(test_df)}
 
@@ -54,7 +56,7 @@ def medical_triage_retrain():
 
     @task()
     def report_metrics(metrics: dict) -> None:
-        """Loga as métricas finais (em produção: publicaria em um dashboard/registro)."""
+        """Loga as métricas finais (em produção: publicaria em um dashboard)."""
         logger.info("Métricas do retreino: %s", metrics)
 
     ingestion_stats = load_data()
