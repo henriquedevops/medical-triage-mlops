@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instala uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.11.28"
+      - name: Instala dependências
+        run: uv sync --frozen
+      - name: Roda ruff
+        run: uv run ruff check src tests
+
+  test:
+    name: Testes (pytest)
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instala uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.11.28"
+      - name: Instala dependências
+        run: uv sync --frozen
+      - name: Treina o modelo (artefato consumido pelos testes da API)
+        run: uv run python -m triage.models.train
+      - name: Roda pytest com cobertura
+        run: uv run pytest tests/ -v --cov=src --cov-report=term-missing
+
+  build:
+    name: Build da imagem Docker
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build da imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: medical-triage-mlops:ci
+          target: runtime
