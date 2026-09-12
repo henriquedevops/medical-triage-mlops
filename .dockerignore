@@ -1,0 +1,17 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.git
+.github
+tests
+notebooks
+docs
+airflow
+monitoring
+reports/*.json
+models/*.joblib
+models/*.onnx
+data/processed
+.env
