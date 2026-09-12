@@ -18,6 +18,7 @@ import json
 import logging
 import time
 from dataclasses import asdict, dataclass
+from itertools import cycle
 
 import joblib
 import numpy as np
@@ -64,7 +65,12 @@ def _percentile(values: list[float], pct: float) -> float:
     return float(np.percentile(values, pct))
 
 
-def _time_calls(fn, n_requests: int) -> LatencyStats:
+def _time_calls(fn, n_requests: int, warmup: int = 20) -> LatencyStats:
+    """Cronometra `n_requests` chamadas de `fn`, descartando `warmup` chamadas
+    iniciais (aquecimento de cache/JIT, para reduzir ruído nas medições)."""
+    for _ in range(warmup):
+        fn()
+
     durations_ms: list[float] = []
     for _ in range(n_requests):
         start = time.perf_counter()
@@ -79,18 +85,12 @@ def _time_calls(fn, n_requests: int) -> LatencyStats:
     )
 
 
-def _repeat_to_length(texts: list[str], n_requests: int) -> list[str]:
-    if len(texts) >= n_requests:
-        return texts[:n_requests]
-    return (texts * n_requests)[:n_requests]
-
-
 def benchmark_baseline(
     settings: Settings, texts: list[str], n_requests: int
 ) -> LatencyStats:
     """Latência do pipeline scikit-learn original (TF-IDF + LR), 1 texto por vez."""
     pipeline = joblib.load(settings.baseline_model_path)
-    sample = iter(_repeat_to_length(texts, n_requests))
+    sample = cycle(texts)
     return _time_calls(lambda: pipeline.predict([next(sample)]), n_requests)
 
 
@@ -103,7 +103,7 @@ def benchmark_onnx(
         str(settings.onnx_classifier_path), providers=["CPUExecutionProvider"]
     )
     input_name = session.get_inputs()[0].name
-    sample = iter(_repeat_to_length(texts, n_requests))
+    sample = cycle(texts)
 
     def _predict_one() -> None:
         vec = vectorizer.transform([next(sample)]).toarray().astype(np.float32)
@@ -112,7 +112,7 @@ def benchmark_onnx(
     return _time_calls(_predict_one, n_requests)
 
 
-def run_latency_comparison(settings: Settings, n_requests: int = 200) -> dict:
+def run_latency_comparison(settings: Settings, n_requests: int = 1000) -> dict:
     """Roda o comparativo baseline vs. ONNX e salva em reports/."""
     from triage.data.loader import load_dataset
 

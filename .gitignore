@@ -19,9 +19,11 @@ models/*.pt
 data/processed/*
 !data/processed/.gitkeep
 
-# Relatórios gerados (latência, comparação de baselines)
+# reports/latency_comparison.json é commitado (entregável da Etapa 4);
+# outros relatórios gerados localmente ficam de fora por padrão.
 reports/*.json
 !reports/.gitkeep
+!reports/latency_comparison.json
 
 # MLflow / logs locais (se usados em experimentação futura)
 mlruns/
