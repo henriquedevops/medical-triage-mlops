@@ -14,7 +14,9 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     """Configurações da aplicação, sobrescrevíveis via variáveis de ambiente."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_prefix="TRIAGE_", extra="ignore"
+    )
 
     seed: int = 42
 
