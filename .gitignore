@@ -1,5 +1,7 @@
 # Ambiente
 .venv/
+.venv-airflow/
+.airflow/
 __pycache__/
 *.pyc
 .pytest_cache/
