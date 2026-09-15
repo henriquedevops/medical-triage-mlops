@@ -25,5 +25,7 @@ compose-down:
 	docker compose down
 
 dag-test:
-	AIRFLOW_HOME=/tmp/airflow_home PYTHONPATH=src \
+	AIRFLOW_HOME=$(CURDIR)/.airflow \
+	AIRFLOW__CORE__DAGS_FOLDER=$(CURDIR)/airflow/dags \
+	PYTHONPATH=src \
 		airflow dags test medical_triage_retrain 2026-01-01
