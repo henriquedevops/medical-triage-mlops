@@ -149,11 +149,11 @@ docker compose up --build
 - Grafana: http://localhost:3000 (login `admin`/`admin`, ou acesso anônimo
   já habilitado) — dashboard "Triagem API" provisionado automaticamente.
 
-> Build e execução do Docker Compose não foram validados neste ambiente
-> (sem Docker Desktop disponível na máquina de desenvolvimento usada para
-> este commit) — Dockerfile e compose foram checados estaticamente com
-> `hadolint` e `docker compose config`. Mesma situação enfrentada e depois
-> fechada na Fase 2; ver notas de sessão no vault Obsidian.
+Validado de ponta a ponta em ambiente local (Windows 11 + Docker Desktop,
+WSL2): os três containers sobem com um único `docker compose up --build`, o
+Prometheus coleta a API (`up{job="triage-api"} = 1`) e o dashboard é
+provisionado automaticamente no Grafana, exibindo dado real após tráfego no
+`/triage`.
 
 ---
 
@@ -161,7 +161,8 @@ docker compose up --build
 
 `.github/workflows/ci.yml`: 3 jobs encadeados (`needs`) — **lint** (ruff) →
 **test** (pytest, com o modelo treinado no próprio job) → **build**
-(`docker build`, sem push). Validado estaticamente com `actionlint`.
+(`docker build`, sem push). Os três jobs executam com sucesso no GitHub
+Actions a cada push na `main` — ver a aba **Actions** do repositório.
 
 ---
 
@@ -172,14 +173,32 @@ TaskFlow API: `load_data → train_and_save_model → report_metrics`. A lógica
 de cada task vive em `src/triage/` (testada por `pytest` independente do
 Airflow); o arquivo da DAG só orquestra.
 
-Validado localmente (fora deste repositório, no ambiente de
-desenvolvimento) com Airflow 2.10.5:
+O Airflow **não** faz parte das dependências do projeto (`pyproject.toml`)
+de propósito: ele carrega mais de cem pacotes transitivos com pins próprios,
+o que engessaria o ambiente da API, e a versão 2.x não suporta Python 3.13+.
+A DAG é executada em um ambiente separado, o que mantém `uv sync` leve e
+rápido para quem só quer rodar a API ou os testes.
+
+Para reproduzir a execução da DAG (requer Python 3.11 ou 3.12):
 
 ```bash
+python -m venv .venv-airflow && source .venv-airflow/bin/activate
+# no Windows: .venv-airflow\Scripts\activate
+
+AIRFLOW_VERSION=2.10.5
+PY_VERSION="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+pip install "apache-airflow==${AIRFLOW_VERSION}" \
+  --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PY_VERSION}.txt"
+pip install -e .   # instala o pacote triage no mesmo venv
+
+export AIRFLOW_HOME="$(pwd)/.airflow"
+export AIRFLOW__CORE__DAGS_FOLDER="$(pwd)/airflow/dags"
 airflow dags test medical_triage_retrain 2026-01-01
 ```
 
-Resultado: as 3 tasks concluíram com `SUCCESS` (`macro_f1=0.6347`).
+Resultado obtido com Airflow 2.10.5: as 3 tasks concluíram com `SUCCESS`
+(`macro_f1=0.6347`). O atalho `make dag-test` roda o último comando
+assumindo que o venv acima já está ativo.
 
 ---
 
@@ -196,7 +215,12 @@ Dashboard Grafana (`monitoring/grafana/dashboards/triage_api.json`), com
 **4 painéis** (mínimo exigido: 3): total de requisições, taxa de erro,
 latência p50/p95 e predições por nível de urgência. Datasource e dashboard
 são provisionados automaticamente ao subir o `docker compose` — sem
-configuração manual na UI do Grafana.
+configuração manual na UI do Grafana (o dashboard fica em **Dashboards →
+Triagem de Laudos — API**).
+
+O painel de taxa de erro usa `or vector(0)` na expressão para exibir 0% em
+vez de "No data" enquanto nenhum erro tiver ocorrido — que é o estado
+saudável esperado, e não ausência de métrica.
 
 ---
 
@@ -214,6 +238,23 @@ Técnica aplicada: conversão do classificador para **ONNX Runtime** (via
 A API pode servir por qualquer um dos dois backends via
 `TRIAGE_USE_ONNX_RUNTIME=true` (variável de ambiente lida por
 `triage.config.Settings`).
+
+### Baseline de latência da API em Docker
+
+Medido com a stack completa de pé, 200 requisições sequenciais ao `/triage`
+(20 de aquecimento descartadas), a partir do host para o container:
+
+| Métrica | Fim a fim (cliente → API) |
+|---|---|
+| p50 | 2.31 ms |
+| p95 | 2.49 ms |
+| média | 2.47 ms |
+
+Esse número inclui a pilha HTTP e o overhead do cliente, portanto é o limite
+superior honesto do tempo de resposta percebido. A latência medida **dentro**
+da API (histograma `triage_request_latency_seconds`) aparece no painel
+"Latência da API (p50 / p95)" do Grafana e é menor, por não contar o
+round-trip — os dois juntos delimitam o intervalo real.
 
 ---
 
@@ -249,8 +290,10 @@ medical-triage-mlops/
 - **Modelagem**: TF-IDF + Regressão Logística, macro-F1 = **0.6347** no
   teste (vs. 0.2025 da classe majoritária e 0.5374 de um Naive Bayes) —
   detalhes e limitações em [`docs/model_card.md`](docs/model_card.md).
-- **CI/CD**: workflow com 2 automações (lint + test) além do build.
+- **CI/CD**: workflow com 2 automações (lint + test) além do build, com
+  execução verde no GitHub Actions.
 - **Orquestração**: DAG Airflow validada de ponta a ponta.
-- **Monitoramento**: stack completa via um único `docker compose up`.
+- **Monitoramento**: stack completa via um único `docker compose up`, com
+  dashboard provisionado e p50/p95 da API a ~2.3-2.5 ms fim a fim.
 - **Latência**: ONNX Runtime ~1.1-1.14x mais rápido que o baseline
   scikit-learn, com a limitação de escopo documentada.
